@@ -1,0 +1,33 @@
+const int redPin = 13;
+const int yellowPin = 12;
+const int greenPin = 11;
+const int bluePin = 10;
+
+void setup() {
+  // Inicializa os pinos do LED RGB como saída
+  pinMode(redPin, OUTPUT);
+  pinMode(yellowPin, OUTPUT);
+  pinMode(greenPin, OUTPUT);
+  pinMode(bluePin, OUTPUT);
+
+
+  // Inicializa a comunicação serial (opcional, para depuração)
+  Serial.begin(9600);
+}
+
+void loop() {
+  // Gera valores aleatórios para as cores do LED RGB
+  int redValue = random(0,2);
+  int yellowValue = random(0,2);
+  int greenValue = random(0, 2);
+  int blueValue = random(0, 2);
+
+  // Define as cores do LED RGB
+  digitalWrite(redPin, redValue * 255);
+  digitalWrite(yellowPin, yellowValue * 255);
+  analogWrite(greenPin, greenValue * 255);
+  analogWrite(bluePin, blueValue *255);
+
+  // Aguarda um tempo antes de mudar novamente (ajuste conforme necessário)
+  delay(100);
+}
