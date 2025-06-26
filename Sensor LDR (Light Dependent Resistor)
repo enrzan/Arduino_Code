@@ -1,0 +1,17 @@
+int PinLDR = A5;     // LDR conectado ao pino analógico 5
+int ValueLDR = 0;    // Variável que irá receber o valor do LDR
+
+int PinBuzzer = 11;  // Declaração do pino para o buzzer
+int PinButton = 10;  // Declaração do pino para o botão
+
+void setup() {
+    pinMode(PinBuzzer, OUTPUT);  // Define a porta 11 como saída para o buzzer
+    pinMode(PinButton, INPUT);   // Define a porta 10 como entrada para o botão
+    Serial.begin(9600);          // Inicia a comunicação serial
+}
+
+void loop() {
+    ValueLDR = analogRead(PinLDR);  // Lê o valor do LDR
+    Serial.println(ValueLDR);       // Imprime o valor lido do LDR no monitor serial
+    delay(100);                     // Aguarda 100 milissegundos antes de repetir
+}
