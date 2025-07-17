@@ -1,12 +1,10 @@
-//para usar digitando o ângulo
-
-
 #include <Servo.h>
 
 #define pinServo 7
 
 Servo servo1;
 int grau = 0;
+int ultimoGrau = -1;
 
 void setup() {
   servo1.attach(pinServo);
@@ -14,15 +12,18 @@ void setup() {
 }
 
 void loop() {
-
-if (Serial.available() > 0) {
-   
-  grau = Serial.parseInt();
-     
+  if (Serial.available() > 0) {
+    String entrada = Serial.readStringUntil('\n');
+    entrada.trim();
+    
+    if (entrada.length() > 0) {
+      int novoGrau = entrada.toInt();
+      if (novoGrau >= 0 && novoGrau <= 180 && novoGrau != ultimoGrau) {
+        grau = novoGrau;
+        servo1.write(grau);
+        Serial.println(grau);
+        ultimoGrau = grau;
+      }
+    }
   }
-
- servo1.write(grau);
- Serial.print("angulo:");
- Serial.println(grau);
- delay(1000); 
 }
