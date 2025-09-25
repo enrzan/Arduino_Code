@@ -1,0 +1,33 @@
+#include <Servo.h>
+Servo servo;
+const int SERVO_PIN=9, TRIG=12, ECHO=11;
+int angle=15, stepA=1;
+
+long readCM(){
+  digitalWrite(TRIG, LOW); delayMicroseconds(3);
+  digitalWrite(TRIG, HIGH); delayMicroseconds(10);
+  digitalWrite(TRIG, LOW);
+  long d = pulseIn(ECHO, HIGH, 30000);
+  if (d==0) return 999;
+  return d/58;
+}
+
+void setup(){
+  servo.attach(SERVO_PIN);
+  pinMode(TRIG, OUTPUT);
+  pinMode(ECHO, INPUT);
+  Serial.begin(9600);
+  servo.write(angle);
+  delay(300);
+}
+
+void loop(){
+  servo.write(angle);
+  delay(15);
+  long cm = readCM();
+  if (cm > 40) cm = 41;   // >40 = "Out of Range" no seu Processing
+  Serial.print(angle); Serial.print(","); Serial.print(cm); Serial.print(".");
+  Serial.println();       // opcional, ajuda debug
+  angle += stepA;
+  if (angle >= 165 || angle <= 15) stepA=-stepA;
+}
