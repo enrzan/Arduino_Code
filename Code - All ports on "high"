@@ -1,0 +1,12 @@
+void setup() {
+  for (int p = 0; p <= 13; p++) {
+    pinMode(p, OUTPUT);
+    digitalWrite(p, HIGH);
+  }
+  for (int p = A0; p <= A5; p++) {
+    pinMode(p, OUTPUT);
+    digitalWrite(p, HIGH);
+  }
+}
+
+void loop() { }
