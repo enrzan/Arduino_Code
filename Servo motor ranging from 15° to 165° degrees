@@ -1,0 +1,35 @@
+#include <Servo.h>
+
+#define pinServo 7
+
+Servo servo1;
+
+int angulo = 15;            // começa em 15°
+int passo  = 1;             // tamanho do passo (° por atualização)
+const int minAng = 15;      // limite inferior
+const int maxAng = 165;     // limite superior
+
+unsigned long intervalo = 15;   // tempo entre passos (ms) -> ajuste para mudar a velocidade
+unsigned long tAnterior = 0;
+
+void setup() {
+  servo1.attach(pinServo);
+  servo1.write(angulo);
+}
+
+void loop() {
+  unsigned long agora = millis();
+  if (agora - tAnterior >= intervalo) {
+    tAnterior = agora;
+
+    angulo += passo;
+
+    // inverte o sentido ao atingir os limites
+    if (angulo >= maxAng || angulo <= minAng) {
+      angulo = constrain(angulo, minAng, maxAng);
+      passo = -passo;
+    }
+
+    servo1.write(angulo);
+  }
+}
