@@ -1,0 +1,251 @@
+/*  Arduino Radar – com ZOOM e distância sempre visível
+ *  - ZOOM reduz o “enchimento” da tela (sem cortar)
+ *  - HUD mostra sempre Distance: N cm
+ *  - Visual: leque verde + rastro vermelho + números (30/60/90/120/150 e 10/20/30/40 cm)
+ */
+
+import processing.serial.*;
+import java.util.Arrays;
+
+Serial myPort;
+PFont font;
+
+// ======= AJUSTES RÁPIDOS =======
+final String SERIAL_PORT = "COM4";   // troque se necessário
+final int    BAUD        = 9600;
+final float  ZOOM        = 0.85;     // 0.70..0.95 (menor = menos “zoom”)
+final int    MAX_CM      = 40;       // alcance gráfico
+// ===============================
+
+// Geometria (recalculado no setup)
+float pixPerCm;
+float cx, cy;
+
+// Estado vindo do Arduino
+int curAngle = 0;
+int curDist  = 999;
+
+// Rastro vermelho
+final int TRAIL_LEN = 120;
+int[] trailAngle = new int[TRAIL_LEN];
+int[] trailDist  = new int[TRAIL_LEN];
+int   trailHead  = -1;
+
+// Cores
+final int GREEN   = color(98, 245, 31);
+final int GRID    = color(98, 245, 31);
+final int SWEEP   = color(30, 250, 60);
+final int REDCOL  = color(255, 10, 10);
+final int BG_DARK = color(18, 19, 20);
+
+// Pré-cálculos de raios (em função do width/height) — aplico ZOOM depois
+float R_ARC1, R_ARC2, R_ARC3, R_ARC4; // diâmetros originais sem zoom
+float R_OUTER_LINE;                   // raio externo para barras/sweep
+float R_SWEEP;                        // comprimento do feixe
+
+void setup() {
+  size(1366, 768);   // pode trocar por 1920x1080, etc.
+  smooth(8);
+  background(BG_DARK);
+
+  font = createFont("Arial", 30, true);
+  textFont(font);
+
+  cx = width/2.0;
+  cy = height - height*0.074;
+
+  // “sensação” original: ~25 px por cm (aplico ZOOM)
+  pixPerCm = ((height - height*0.1666f) * 0.025f) * ZOOM;
+
+  // diâmetros originais do projeto (sem zoom)
+  R_ARC1 = (width - width*0.0625);
+  R_ARC2 = (width - width*0.27);
+  R_ARC3 = (width - width*0.479);
+  R_ARC4 = (width - width*0.687);
+
+  R_OUTER_LINE = (width - width*0.505); // usava para linhas de objeto
+  R_SWEEP      = (height - height*0.12);
+
+  // abre serial
+  println("Portas:", Arrays.toString(Serial.list()));
+  myPort = new Serial(this, SERIAL_PORT, BAUD);
+  myPort.clear();
+  myPort.bufferUntil('.');
+}
+
+void draw() {
+  // fundo com leve “fade” para suavizar o rastro
+  noStroke();
+  fill(0, 18);
+  rect(0, 0, width, height - height*0.065);
+
+  drawGridLines();
+  drawTrail();
+  drawSweepFan();
+  drawAngleLabels();
+  drawRadiusLabels();
+  drawHUD();
+}
+
+void serialEvent(Serial p) {
+  String s = p.readStringUntil('.');
+  if (s == null) return;
+  s = trim(s);
+  if (s.length() == 0) return;
+  if (s.charAt(s.length()-1) == '.') s = s.substring(0, s.length()-1);
+  int comma = s.indexOf(',');
+  if (comma < 0) return;
+  try {
+    curAngle = constrain(Integer.parseInt(s.substring(0, comma).trim()), 15, 165);
+    curDist  = max(0, Integer.parseInt(s.substring(comma+1).trim()));
+    pushTrail(curAngle, curDist);
+  } catch(Exception e) { }
+}
+
+void pushTrail(int ang, int dist) {
+  trailHead = (trailHead + 1) % TRAIL_LEN;
+  trailAngle[trailHead] = ang;
+  trailDist [trailHead] = dist;
+}
+
+// ---------- GRID (sem textos) ----------
+void drawGridLines() {
+  pushMatrix();
+  translate(cx, cy);
+  noFill();
+  strokeWeight(2);
+  stroke(GRID);
+
+  // arcos com ZOOM (usando DIÂMETRO * ZOOM)
+  arc(0,0, R_ARC1*ZOOM, R_ARC1*ZOOM, PI, TWO_PI);
+  arc(0,0, R_ARC2*ZOOM, R_ARC2*ZOOM, PI, TWO_PI);
+  arc(0,0, R_ARC3*ZOOM, R_ARC3*ZOOM, PI, TWO_PI);
+  arc(0,0, R_ARC4*ZOOM, R_ARC4*ZOOM, PI, TWO_PI);
+
+  // linhas angulares com ZOOM
+  line(-width/2*ZOOM, 0, width/2*ZOOM, 0);
+  for (int a : new int[]{30,60,90,120,150}) {
+    line(0,0, (-width/2*ZOOM)*cos(radians(a)), (-width/2*ZOOM)*sin(radians(a)));
+  }
+  line((-width/2*ZOOM)*cos(radians(30)), 0, width/2*ZOOM, 0);
+  popMatrix();
+}
+
+// ---------- Rastro vermelho ----------
+void drawTrail() {
+  if (trailHead < 0) return;
+  int idx = trailHead;
+  for (int k = 0; k < TRAIL_LEN; k++) {
+    int ang = trailAngle[idx];
+    int dst = trailDist [idx];
+
+    if (dst > 0 && dst < MAX_CM) {
+      float r      = dst * pixPerCm; // já leva ZOOM
+      float ax     = cx + r * cos(radians(ang));
+      float ay     = cy - r * sin(radians(ang));
+      float outerX = cx + (R_OUTER_LINE*ZOOM)*cos(radians(ang));
+      float outerY = cy - (R_OUTER_LINE*ZOOM)*sin(radians(ang));
+
+      float alpha  = map(k, 0, TRAIL_LEN-1, 230, 10);
+      stroke(REDCOL, alpha);
+      strokeWeight(6);
+      line(ax, ay, outerX, outerY);
+    }
+    idx = (idx - 1 + TRAIL_LEN) % TRAIL_LEN;
+  }
+}
+
+// ---------- Leque/“glow” verde ----------
+void drawSweepFan() {
+  final float FAN_WIDTH = 10;   // abertura (graus)
+  final int   FAN_STEPS = 32;   // camadas no degradê
+  for (int i = 0; i < FAN_STEPS; i++) {
+    float t   = i / (float)(FAN_STEPS-1);
+    float ang = curAngle - FAN_WIDTH/2.0 + t * FAN_WIDTH;
+    float alpha = lerp(220, 10, t);
+    stroke(SWEEP, alpha);
+    strokeWeight(7);
+    line(cx, cy,
+         cx + (R_SWEEP*ZOOM)*cos(radians(ang)),
+         cy - (R_SWEEP*ZOOM)*sin(radians(ang)));
+  }
+  stroke(SWEEP);
+  strokeWeight(10);
+  line(cx, cy,
+       cx + (R_SWEEP*ZOOM)*cos(radians(curAngle)),
+       cy - (R_SWEEP*ZOOM)*sin(radians(curAngle)));
+}
+
+// ---------- Labels de ângulo ----------
+void drawAngleLabels(){
+  fill(GREEN);
+  textFont(font);
+  textSize(28);
+  textAlign(CENTER, CENTER);
+
+  drawAngleLabelRot( 30, -60, "30°");
+  drawAngleLabelRot( 60, -30, "60°");
+  drawAngleLabelRot( 90,   0, "90°");
+  drawAngleLabelRot(120, -30, "120°");
+  drawAngleLabelRot(150, -60, "150°");
+}
+
+void drawAngleLabelRot(float deg, float rotDeg, String txt){
+  float rx = (R_ARC1/2.0f)*ZOOM - 12; // perto do arco externo, com margem
+  pushMatrix();
+  translate(cx + rx*cos(radians(deg)),
+            cy - rx*sin(radians(deg)));
+  rotate(radians(rotDeg));
+  noStroke();
+  text(txt, 0, 0);
+  popMatrix();
+}
+
+// ---------- Labels de raio (10/20/30/40 cm) ----------
+void drawRadiusLabels(){
+  fill(GREEN);
+  textFont(font);
+  textSize(24);
+  textAlign(CENTER, CENTER);
+
+  // posiciono no quadrante direito, um pouco acima do eixo
+  drawRadiusLabel(10,  8);
+  drawRadiusLabel(20,  8);
+  drawRadiusLabel(30,  8);
+  drawRadiusLabel(40,  8);
+}
+
+void drawRadiusLabel(int cm, float atDeg){
+  float r = cm * pixPerCm; // já leva ZOOM
+  pushMatrix();
+  translate(cx + r*cos(radians(atDeg)),
+            cy - r*sin(radians(atDeg)));
+  noStroke();
+  text(cm + "cm", 0, 0);
+  popMatrix();
+}
+
+// ---------- HUD inferior ----------
+void drawHUD() {
+  // barra inferior
+  fill(0);
+  noStroke();
+  rect(0, height - height*0.0648, width, height);
+
+  fill(GREEN);
+  textSize(25);
+  textAlign(LEFT, CENTER);
+
+  text("10cm", width - width*0.3854, height - height*0.0833);
+  text("20cm", width - width*0.281,  height - height*0.0833);
+  text("30cm", width - width*0.177,  height - height*0.0833);
+  text("40cm", width - width*0.0729, height - height*0.0833);
+
+  textSize(40);
+  String inRange = (curDist < MAX_CM) ? "In Range" : "Out of Range";
+  // >>> sempre mostra a distância em cm, mesmo > MAX_CM <<<
+  String distStr = curDist + " cm";
+  text("Object: " + inRange,      width - width*0.875, height - height*0.0277);
+  text("Angle: "  + curAngle+" °",width - width*0.48,  height - height*0.0277);
+  text("Distance: " + distStr,    width - width*0.26,  height - height*0.0277);
+}
