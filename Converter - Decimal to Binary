@@ -1,0 +1,54 @@
+const uint8_t ledPins[4] = {10, 11, 12, 13};
+const unsigned long BAUD = 9600;
+
+void setup() {
+  Serial.begin(BAUD);
+  for (uint8_t i = 0; i < 4; i++) {
+    pinMode(ledPins[i], OUTPUT);
+    digitalWrite(ledPins[i], LOW);
+  }
+  Serial.println(F("Enter a number from 0 to 9 and press Enter."));
+  Serial.println(F("Values outside the range will make all LEDs blink for 1 second."));
+}
+
+void loop() {
+  if (Serial.available() > 0) {
+    String input = Serial.readStringUntil('\n');
+    input.trim();
+    if (input.length() == 0) return;
+    if (input.length() == 1 && isDigit(input[0])) {
+      int val = input[0] - '0';
+      if (val >= 0 && val <= 9) {
+        showBinary(val);
+        Serial.print(F("Value: "));
+        Serial.print(val);
+        Serial.print(F("  Binary: "));
+        printBinaryToSerial(val);
+        Serial.println();
+      } else {
+        blinkErrorOnce();
+      }
+    } else {
+      blinkErrorOnce();
+    }
+  }
+}
+
+void showBinary(uint8_t value) {
+  for (uint8_t i = 0; i < 4; i++) {
+    uint8_t bitVal = (value >> i) & 0x01;
+    digitalWrite(ledPins[i], bitVal ? HIGH : LOW);
+  }
+}
+
+void blinkErrorOnce() {
+  for (uint8_t i = 0; i < 4; i++) digitalWrite(ledPins[i], HIGH);
+  delay(1000);
+  for (uint8_t i = 0; i < 4; i++) digitalWrite(ledPins[i], LOW);
+}
+
+void printBinaryToSerial(uint8_t value) {
+  for (int i = 3; i >= 0; i--) {
+    Serial.print((value >> i) & 0x01);
+  }
+}
