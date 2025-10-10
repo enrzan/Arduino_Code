@@ -1,0 +1,55 @@
+const int segPins[7] = {2, 3, 4, 5, 6, 7, 8};
+const int btnPins[4] = {A3, A2, A1, A0};
+
+const bool COMMON_ANODE = true;
+const bool BUTTON_ACTIVE_HIGH = true;
+
+const byte DIGITS_CC[10][7] = {
+  {1,1,1,1,1,1,0},
+  {0,1,1,0,0,0,0},
+  {1,1,0,1,1,0,1},
+  {1,1,1,1,0,0,1},
+  {0,1,1,0,0,1,1},
+  {1,0,1,1,0,1,1},
+  {1,0,1,1,1,1,1},
+  {1,1,1,0,0,0,0},
+  {1,1,1,1,1,1,1},
+  {1,1,1,1,0,1,1}
+};
+
+void setup() {
+  for (int p : segPins) pinMode(p, OUTPUT);
+  for (int p : btnPins) pinMode(p, INPUT);
+  clearDisplay();
+}
+
+inline bool pressed(int pin) {
+  int v = digitalRead(pin);
+  return BUTTON_ACTIVE_HIGH ? (v == HIGH) : (v == LOW);
+}
+
+void loop() {
+  int value = (pressed(btnPins[0]) ? 1 : 0)
+            | (pressed(btnPins[1]) ? 2 : 0)
+            | (pressed(btnPins[2]) ? 4 : 0)
+            | (pressed(btnPins[3]) ? 8 : 0);
+
+  if (value <= 9) showDigit(value);
+  else clearDisplay();
+
+  delay(10);
+}
+
+void showDigit(int d) {
+  for (int i = 0; i < 7; i++) {
+    int level = DIGITS_CC[d][i];
+    if (COMMON_ANODE) level = !level;
+    digitalWrite(segPins[i], level ? HIGH : LOW);
+  }
+}
+
+void clearDisplay() {
+  for (int i = 0; i < 7; i++) {
+    digitalWrite(segPins[i], COMMON_ANODE ? HIGH : LOW);
+  }
+}
