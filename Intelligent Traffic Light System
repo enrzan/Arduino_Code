@@ -1,0 +1,275 @@
+// ===== PINOS conforme o circuito =====
+const byte A_RED    = 7;
+const byte A_YELLOW = 6;
+const byte A_GREEN  = 5;
+
+const byte B_RED    = 4;
+const byte B_YELLOW = 3;
+const byte B_GREEN  = 2;
+
+const byte P_GREEN  = 0; // RX
+const byte P_RED    = 1; // TX
+
+const byte BTN_PIN  = 10; // botão entre D10 e GND (INPUT_PULLUP)
+
+// ===== TEMPOS =====
+const unsigned long T_GREEN   = 50000UL; // 50s
+const unsigned long T_YELLOW  = 3000UL;  // 3s
+const unsigned long T_PED     = 10000UL; // 10s (pedestre do ciclo)
+const unsigned long T_ALL_RED = 3000UL;  // 3s segurança
+const unsigned long T_PED_BTN = 5000UL;  // 5s pedestre do botão
+const unsigned long T_YEL_BTN = 3000UL;  // 3s amarelo ao apertar
+
+const unsigned long DEBOUNCE_MS = 50UL;
+
+// ===== ESTADOS PRINCIPAIS =====
+// segurança antes de abrir A/B
+const int ST_SAFE_BEFORE_A     = 0;
+const int ST_A_GREEN           = 1;
+const int ST_A_YELLOW          = 2;
+
+// NOVO: segurança antes de abrir pedestre (após amarelo)
+const int ST_ALLRED_BEFORE_PED_1 = 3;
+const int ST_PED_1             = 4;
+
+// segurança antes de abrir B
+const int ST_SAFE_BEFORE_B     = 5;
+const int ST_B_GREEN           = 6;
+const int ST_B_YELLOW          = 7;
+
+// NOVO: segurança antes de abrir pedestre (após amarelo)
+const int ST_ALLRED_BEFORE_PED_2 = 8;
+const int ST_PED_2             = 9;
+
+// ===== ESTADOS DO BOTÃO =====
+const int BTN_IDLE         = 100;
+const int BTN_YELLOW_3S    = 101;
+const int BTN_ALLRED_1     = 102;
+const int BTN_PED_5S       = 103;
+const int BTN_ALLRED_2     = 104;
+const int BTN_RETURN       = 105;
+
+// ===== CONTROLE =====
+int mainState = ST_SAFE_BEFORE_A;
+int btnState  = BTN_IDLE;
+
+unsigned long stateStart = 0;
+
+// pause/retorno
+int pausedMainState = ST_SAFE_BEFORE_A;
+unsigned long pausedRemaining = 0;
+bool pressedDuringA = false;
+bool pressedDuringB = false;
+
+// botão (debounce + clique)
+bool btnStable = HIGH;
+bool btnLastStable = HIGH;
+unsigned long lastDebounceTime = 0;
+bool btnRequest = false;
+
+// ===== SAÍDAS =====
+void allCarsRed() {
+  digitalWrite(A_GREEN, LOW);  digitalWrite(A_YELLOW, LOW);  digitalWrite(A_RED, HIGH);
+  digitalWrite(B_GREEN, LOW);  digitalWrite(B_YELLOW, LOW);  digitalWrite(B_RED, HIGH);
+}
+void pedRed()   { digitalWrite(P_GREEN, LOW);  digitalWrite(P_RED, HIGH); }
+void pedGreen() { digitalWrite(P_RED, LOW);    digitalWrite(P_GREEN, HIGH); }
+
+void setAOpen() {
+  digitalWrite(A_RED, LOW);    digitalWrite(A_YELLOW, LOW); digitalWrite(A_GREEN, HIGH);
+  digitalWrite(B_GREEN, LOW);  digitalWrite(B_YELLOW, LOW); digitalWrite(B_RED, HIGH);
+  pedRed();
+}
+void setBOpen() {
+  digitalWrite(B_RED, LOW);    digitalWrite(B_YELLOW, LOW); digitalWrite(B_GREEN, HIGH);
+  digitalWrite(A_GREEN, LOW);  digitalWrite(A_YELLOW, LOW); digitalWrite(A_RED, HIGH);
+  pedRed();
+}
+void setAYellow() {
+  digitalWrite(A_GREEN, LOW);  digitalWrite(A_RED, LOW);    digitalWrite(A_YELLOW, HIGH);
+  digitalWrite(B_GREEN, LOW);  digitalWrite(B_YELLOW, LOW); digitalWrite(B_RED, HIGH);
+  pedRed();
+}
+void setBYellow() {
+  digitalWrite(B_GREEN, LOW);  digitalWrite(B_RED, LOW);    digitalWrite(B_YELLOW, HIGH);
+  digitalWrite(A_GREEN, LOW);  digitalWrite(A_YELLOW, LOW); digitalWrite(A_RED, HIGH);
+  pedRed();
+}
+void setAllRedPedRed() {
+  allCarsRed();
+  pedRed();
+}
+void setPedCycle() {
+  allCarsRed();
+  pedGreen();
+}
+
+// duração de cada estado principal
+unsigned long mainDuration(int s) {
+  if (s == ST_SAFE_BEFORE_A || s == ST_SAFE_BEFORE_B) return T_ALL_RED;
+  if (s == ST_A_GREEN || s == ST_B_GREEN)             return T_GREEN;
+  if (s == ST_A_YELLOW || s == ST_B_YELLOW)           return T_YELLOW;
+
+  // NOVOS all-red antes do pedestre
+  if (s == ST_ALLRED_BEFORE_PED_1 || s == ST_ALLRED_BEFORE_PED_2) return T_ALL_RED;
+
+  if (s == ST_PED_1 || s == ST_PED_2)                 return T_PED;
+  return 0;
+}
+
+void enterMain(int s) {
+  mainState = s;
+  stateStart = millis();
+
+  if (mainState == ST_SAFE_BEFORE_A)        { setAllRedPedRed(); return; }
+  if (mainState == ST_A_GREEN)              { setAOpen();        return; }
+  if (mainState == ST_A_YELLOW)             { setAYellow();      return; }
+  if (mainState == ST_ALLRED_BEFORE_PED_1)  { setAllRedPedRed(); return; }
+  if (mainState == ST_PED_1)                { setPedCycle();     return; }
+
+  if (mainState == ST_SAFE_BEFORE_B)        { setAllRedPedRed(); return; }
+  if (mainState == ST_B_GREEN)              { setBOpen();        return; }
+  if (mainState == ST_B_YELLOW)             { setBYellow();      return; }
+  if (mainState == ST_ALLRED_BEFORE_PED_2)  { setAllRedPedRed(); return; }
+  if (mainState == ST_PED_2)                { setPedCycle();     return; }
+}
+
+void enterBtn(int s) {
+  btnState = s;
+  stateStart = millis();
+
+  if (btnState == BTN_YELLOW_3S) {
+    // amarelo só se apertou durante verde
+    if (pressedDuringA) {
+      digitalWrite(A_GREEN, LOW); digitalWrite(A_RED, LOW); digitalWrite(A_YELLOW, HIGH);
+      digitalWrite(B_GREEN, LOW); digitalWrite(B_YELLOW, LOW); digitalWrite(B_RED, HIGH);
+      pedRed();
+    } else if (pressedDuringB) {
+      digitalWrite(B_GREEN, LOW); digitalWrite(B_RED, LOW); digitalWrite(B_YELLOW, HIGH);
+      digitalWrite(A_GREEN, LOW); digitalWrite(A_YELLOW, LOW); digitalWrite(A_RED, HIGH);
+      pedRed();
+    } else {
+      setAllRedPedRed();
+    }
+    return;
+  }
+
+  if (btnState == BTN_ALLRED_1) { setAllRedPedRed(); return; }
+  if (btnState == BTN_PED_5S)   { allCarsRed(); pedGreen(); return; }
+  if (btnState == BTN_ALLRED_2) { setAllRedPedRed(); return; }
+}
+
+// ===== BOTÃO =====
+void updateButton() {
+  bool reading = digitalRead(BTN_PIN);
+
+  if (reading != btnStable) {
+    lastDebounceTime = millis();
+    btnStable = reading;
+  }
+
+  if (millis() - lastDebounceTime >= DEBOUNCE_MS) {
+    if (btnLastStable == HIGH && btnStable == LOW) {
+      btnRequest = true;
+    }
+    btnLastStable = btnStable;
+  }
+}
+
+void startButtonSequence() {
+  unsigned long now = millis();
+  unsigned long elapsed = now - stateStart;
+
+  pausedMainState = mainState;
+
+  unsigned long dur = mainDuration(pausedMainState);
+  pausedRemaining = (elapsed >= dur) ? 0 : (dur - elapsed);
+
+  pressedDuringA = (pausedMainState == ST_A_GREEN);
+  pressedDuringB = (pausedMainState == ST_B_GREEN);
+
+  enterBtn(BTN_YELLOW_3S);
+}
+
+void resumePausedState() {
+  // reaplica saídas do estado pausado
+  enterMain(pausedMainState);
+
+  // ajustar timer para faltar pausedRemaining
+  unsigned long now = millis();
+  unsigned long dur = mainDuration(mainState);
+  unsigned long already = (dur >= pausedRemaining) ? (dur - pausedRemaining) : 0;
+  stateStart = now - already;
+}
+
+void setup() {
+  pinMode(A_RED, OUTPUT);    pinMode(A_YELLOW, OUTPUT);  pinMode(A_GREEN, OUTPUT);
+  pinMode(B_RED, OUTPUT);    pinMode(B_YELLOW, OUTPUT);  pinMode(B_GREEN, OUTPUT);
+  pinMode(P_RED, OUTPUT);    pinMode(P_GREEN, OUTPUT);
+
+  pinMode(BTN_PIN, INPUT_PULLUP);
+
+  // INÍCIO GARANTIDO: tudo vermelho + ped vermelho, espera estado de segurança e abre A
+  btnState = BTN_IDLE;
+  enterMain(ST_SAFE_BEFORE_A);
+}
+
+void loop() {
+  updateButton();
+
+  unsigned long now = millis();
+  unsigned long elapsed = now - stateStart;
+
+  // botão tem prioridade
+  if (btnRequest && btnState == BTN_IDLE) {
+    btnRequest = false;
+    startButtonSequence();
+    return;
+  }
+
+  // ===== fluxo do botão =====
+  if (btnState != BTN_IDLE) {
+    if (btnState == BTN_YELLOW_3S) {
+      if (elapsed >= T_YEL_BTN) enterBtn(BTN_ALLRED_1);
+      return;
+    }
+    if (btnState == BTN_ALLRED_1) {
+      if (elapsed >= T_ALL_RED) enterBtn(BTN_PED_5S);
+      return;
+    }
+    if (btnState == BTN_PED_5S) {
+      if (elapsed >= T_PED_BTN) enterBtn(BTN_ALLRED_2);
+      return;
+    }
+    if (btnState == BTN_ALLRED_2) {
+      if (elapsed >= T_ALL_RED) {
+        btnState = BTN_RETURN;
+        stateStart = millis();
+      }
+      return;
+    }
+    if (btnState == BTN_RETURN) {
+      btnState = BTN_IDLE;
+      resumePausedState();
+      return;
+    }
+  }
+
+  // ===== ciclo normal =====
+  unsigned long dur = mainDuration(mainState);
+
+  if (elapsed >= dur) {
+    // sequência normal com SEGURANÇA antes do pedestre
+    if      (mainState == ST_SAFE_BEFORE_A)        enterMain(ST_A_GREEN);
+    else if (mainState == ST_A_GREEN)              enterMain(ST_A_YELLOW);
+    else if (mainState == ST_A_YELLOW)             enterMain(ST_ALLRED_BEFORE_PED_1);
+    else if (mainState == ST_ALLRED_BEFORE_PED_1)  enterMain(ST_PED_1);
+    else if (mainState == ST_PED_1)                enterMain(ST_SAFE_BEFORE_B);
+
+    else if (mainState == ST_SAFE_BEFORE_B)        enterMain(ST_B_GREEN);
+    else if (mainState == ST_B_GREEN)              enterMain(ST_B_YELLOW);
+    else if (mainState == ST_B_YELLOW)             enterMain(ST_ALLRED_BEFORE_PED_2);
+    else if (mainState == ST_ALLRED_BEFORE_PED_2)  enterMain(ST_PED_2);
+    else if (mainState == ST_PED_2)                enterMain(ST_SAFE_BEFORE_A);
+  }
+}
