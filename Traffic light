@@ -1,0 +1,106 @@
+// ===== PINOS conforme o circuito da imagem =====
+// Semáforo A (esquerda embaixo)
+const byte A_RED    = 7;
+const byte A_YELLOW = 6;
+const byte A_GREEN  = 5;
+
+// Semáforo B (direita embaixo)
+const byte B_RED    = 4;
+const byte B_YELLOW = 3;
+const byte B_GREEN  = 2;
+
+// Pedestres (em cima) -> ATENÇÃO: usando RX/TX
+const byte P_GREEN  = 0; // RX
+const byte P_RED    = 1; // TX
+
+// ===== TEMPOS =====
+const unsigned long T_GREEN   = 50000UL; // 50s (alterado)
+const unsigned long T_YELLOW  = 3000UL;  // 3s
+const unsigned long T_PED     = 10000UL; // 10s
+const unsigned long T_ALL_RED = 3000UL;  // 3s margem de segurança (novo)
+
+void setup() {
+  pinMode(A_RED, OUTPUT);    pinMode(A_YELLOW, OUTPUT);  pinMode(A_GREEN, OUTPUT);
+  pinMode(B_RED, OUTPUT);    pinMode(B_YELLOW, OUTPUT);  pinMode(B_GREEN, OUTPUT);
+  pinMode(P_RED, OUTPUT);    pinMode(P_GREEN, OUTPUT);
+}
+
+void loop() {
+
+  // ==========================================================
+  // MARGEM DE SEGURANÇA antes de abrir o A (tudo vermelho 3s)
+  // ==========================================================
+  digitalWrite(A_GREEN, LOW);  digitalWrite(A_YELLOW, LOW);  digitalWrite(A_RED, HIGH);
+  digitalWrite(B_GREEN, LOW);  digitalWrite(B_YELLOW, LOW);  digitalWrite(B_RED, HIGH);
+  digitalWrite(P_GREEN, LOW);  digitalWrite(P_RED, HIGH);
+  delay(T_ALL_RED);
+
+  // ===== Fase 1: A verde 50s | B vermelho | pedestre vermelho =====
+  digitalWrite(A_RED, LOW);
+  digitalWrite(A_GREEN, HIGH);
+
+  digitalWrite(B_RED, HIGH);
+  digitalWrite(B_GREEN, LOW);
+  digitalWrite(B_YELLOW, LOW);
+
+  digitalWrite(P_GREEN, LOW);
+  digitalWrite(P_RED, HIGH);
+
+  delay(T_GREEN);
+
+  // ===== Fase 2: A amarelo 3s =====
+  digitalWrite(A_GREEN, LOW);
+  digitalWrite(A_YELLOW, HIGH);
+  delay(T_YELLOW);
+
+  // ===== Fase 3: A vermelho | B vermelho | pedestre verde 10s =====
+  digitalWrite(A_YELLOW, LOW);
+  digitalWrite(A_RED, HIGH);
+
+  digitalWrite(B_RED, HIGH);
+
+  digitalWrite(P_RED, LOW);
+  digitalWrite(P_GREEN, HIGH);
+  delay(T_PED);
+
+  // volta pedestre ao vermelho
+  digitalWrite(P_GREEN, LOW);
+  digitalWrite(P_RED, HIGH);
+
+  // ==========================================================
+  // MARGEM DE SEGURANÇA antes de abrir o B (tudo vermelho 3s)
+  // ==========================================================
+  digitalWrite(A_RED, HIGH);   digitalWrite(A_YELLOW, LOW);  digitalWrite(A_GREEN, LOW);
+  digitalWrite(B_RED, HIGH);   digitalWrite(B_YELLOW, LOW);  digitalWrite(B_GREEN, LOW);
+  // pedestre já está vermelho
+  delay(T_ALL_RED);
+
+  // ===== Fase 4: B verde 50s | A vermelho | pedestre vermelho =====
+  digitalWrite(B_RED, LOW);
+  digitalWrite(B_GREEN, HIGH);
+
+  digitalWrite(A_RED, HIGH);
+  digitalWrite(A_GREEN, LOW);
+  digitalWrite(A_YELLOW, LOW);
+
+  delay(T_GREEN);
+
+  // ===== Fase 5: B amarelo 3s =====
+  digitalWrite(B_GREEN, LOW);
+  digitalWrite(B_YELLOW, HIGH);
+  delay(T_YELLOW);
+
+  // ===== Fase 6: B vermelho | A vermelho | pedestre verde 10s =====
+  digitalWrite(B_YELLOW, LOW);
+  digitalWrite(B_RED, HIGH);
+
+  digitalWrite(A_RED, HIGH);
+
+  digitalWrite(P_RED, LOW);
+  digitalWrite(P_GREEN, HIGH);
+  delay(T_PED);
+
+  // volta pedestre ao vermelho e repete
+  digitalWrite(P_GREEN, LOW);
+  digitalWrite(P_RED, HIGH);
+}
