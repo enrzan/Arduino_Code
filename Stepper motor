@@ -1,0 +1,41 @@
+// Arduino Uno conectado ao ULN2003
+const byte IN1 = 8;
+const byte IN2 = 9;
+const byte IN3 = 10;
+const byte IN4 = 11;
+
+// Sequência de meio passo para o motor 28BYJ-48
+const byte sequencia[8][4] = {
+  {1, 0, 0, 0},
+  {1, 1, 0, 0},
+  {0, 1, 0, 0},
+  {0, 1, 1, 0},
+  {0, 0, 1, 0},
+  {0, 0, 1, 1},
+  {0, 0, 0, 1},
+  {1, 0, 0, 1}
+};
+
+void aplicarPasso(byte passo) {
+  digitalWrite(IN1, sequencia[passo][0]);
+  digitalWrite(IN2, sequencia[passo][1]);
+  digitalWrite(IN3, sequencia[passo][2]);
+  digitalWrite(IN4, sequencia[passo][3]);
+}
+
+void setup() {
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(IN3, OUTPUT);
+  pinMode(IN4, OUTPUT);
+}
+
+void loop() {
+  // Repete continuamente os oito estados
+  for (byte passo = 0; passo < 8; passo++) {
+    aplicarPasso(passo);
+
+    // Quanto maior o valor, menor a velocidade
+    delay(2);
+  }
+}
