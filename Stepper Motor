@@ -1,10 +1,8 @@
-// Arduino Uno conectado ao ULN2003
 const byte IN1 = 8;
 const byte IN2 = 9;
 const byte IN3 = 10;
 const byte IN4 = 11;
 
-// Sequência de meio passo para o motor 28BYJ-48
 const byte sequencia[8][4] = {
   {1, 0, 0, 0},
   {1, 1, 0, 0},
@@ -31,11 +29,8 @@ void setup() {
 }
 
 void loop() {
-  // Repete continuamente os oito estados
   for (byte passo = 0; passo < 8; passo++) {
     aplicarPasso(passo);
-
-    // Quanto maior o valor, menor a velocidade
     delay(2);
   }
 }
