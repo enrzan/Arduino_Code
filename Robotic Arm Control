@@ -1,0 +1,98 @@
+#include <Servo.h>
+
+const uint8_t POT_PIN[4] = {
+  A0, A1, A2, A3
+};
+
+const uint8_t SERVO_PIN[4] = {
+  7, 6, 5, 4
+};
+
+const int SERVO_MIN[4] = {
+  700, 700, 700, 900
+};
+
+const int SERVO_MAX[4] = {
+  2300, 2300, 2300, 1900
+};
+
+const int DEAD_BAND = 15;
+const float ALPHA = 0.10;
+
+Servo servo[4];
+
+float potFiltered[4];
+int servoPulsePrev[4];
+
+int readPotAverage(uint8_t pin) {
+  long total = 0;
+
+  for (int i = 0; i < 8; i++) {
+    total += analogRead(pin);
+  }
+
+  return total / 8;
+}
+
+void setup() {
+  for (int i = 0; i < 4; i++) {
+    potFiltered[i] = readPotAverage(POT_PIN[i]);
+
+    int initialPulse = map(
+      (int)potFiltered[i],
+      0,
+      1023,
+      SERVO_MIN[i],
+      SERVO_MAX[i]
+    );
+
+    initialPulse = constrain(
+      initialPulse,
+      SERVO_MIN[i],
+      SERVO_MAX[i]
+    );
+
+    servoPulsePrev[i] = initialPulse;
+
+    servo[i].attach(
+      SERVO_PIN[i],
+      SERVO_MIN[i],
+      SERVO_MAX[i]
+    );
+
+    servo[i].writeMicroseconds(initialPulse);
+
+    delay(100);
+  }
+}
+
+void loop() {
+  for (int i = 0; i < 4; i++) {
+    int potRaw = readPotAverage(POT_PIN[i]);
+
+    potFiltered[i] =
+      ALPHA * potRaw +
+      (1.0 - ALPHA) * potFiltered[i];
+
+    int pulse = map(
+      (int)potFiltered[i],
+      0,
+      1023,
+      SERVO_MIN[i],
+      SERVO_MAX[i]
+    );
+
+    pulse = constrain(
+      pulse,
+      SERVO_MIN[i],
+      SERVO_MAX[i]
+    );
+
+    if (abs(pulse - servoPulsePrev[i]) >= DEAD_BAND) {
+      servo[i].writeMicroseconds(pulse);
+      servoPulsePrev[i] = pulse;
+    }
+  }
+
+  delay(15);
+}
